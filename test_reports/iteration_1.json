@@ -1,0 +1,28 @@
+{
+  "summary": "Backend-only testing for the Italian AI Personal Coach API. Seeded a test user + session directly in MongoDB (user_id=user_test123, token=test-token-abc) and exercised the full flow end-to-end against the external EXPO_PUBLIC_BACKEND_URL with /api prefix. All 16 pytest cases passed in ~70s including real Claude Sonnet 5 calls via emergentintegrations. Covered: health, auth protection (missing + invalid bearer), goal creation with initial greeting, list/active goal, messages history, multi-turn interview reaching ready_to_generate=true with [PRONTO] stripped, plan generation producing status=active with milestones and daily_tasks having metric_label/metric_target/metric_unit + target_summary + feasibility_note, /today completed/total, task log persistence reflected in /today, /progress with 14-day series + streak + milestones, milestone toggle on/off, /checkin returning non-empty AI feedback and appearing in /checkins, and DELETE soft-delete removing the goal from listings and returning 404 on GET.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": [], "react_native_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_coach_backend.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py: /goals/{goal_id} route is registered after /goals/active so path ordering is OK today, but any future dynamic route added before /goals/active could shadow it - consider prefixing static sub-routes or explicit ordering.",
+    "log_task upsert stores metric_value even when None; harmless but could be omitted when null for cleaner docs.",
+    "generate_plan catches generic Exception -> 502, which will also mask JSON parse failures; consider distinguishing LLM errors vs parse errors for observability.",
+    "auth_session inserts a new user_sessions doc every time without upserting on session_token (which is unique-indexed); repeated OAuth callbacks with same session_token would raise a duplicate-key error 500. Consider upsert."
+  ],
+  "updated_files": [
+    "/app/backend/tests/__init__.py",
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_coach_backend.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "not tested"},
+  "seed_data_creation": "conftest.py inserts users doc {user_id:user_test123, email:tester@example.com} and user_sessions doc {session_token:test-token-abc, expires_at:now+7d}; teardown cleans users/user_sessions/goals/messages/task_logs/checkins for that user.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/conftest.py (seed_user autouse fixture) and BASE_URL from EXPO_PUBLIC_BACKEND_URL. Real Claude calls take 5-15s each; keep timeouts >=60s for LLM endpoints. Tests are ordered via a session-scoped `state` fixture (goal_id -> plan -> task_id/milestone_id -> checkin -> delete). If the LLM ever fails to emit [PRONTO], test_generate_plan still runs and validates plan shape.",
+  "rca_of_issue": ""
+}

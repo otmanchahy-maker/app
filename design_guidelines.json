@@ -1,0 +1,175 @@
+{
+  "app_name": "AI Personal Coach",
+  "personality": "4 Tactile / Playful LIGHT",
+  "personality_one_liner": "An energetic, motivating, and highly tactile coaching companion that turns daily discipline into a vibrant, rewarding game.",
+  "color": {
+    "surface": "#FDFBF7",
+    "onSurface": "#111418",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#111418",
+    "surfaceTertiary": "#F4F0E8",
+    "onSurfaceTertiary": "#3B3D42",
+    "surfaceInverse": "#111418",
+    "onSurfaceInverse": "#FDFBF7",
+    "brand": "#FF6B35",
+    "brandPrimary": "#FF6B35",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#FFE3D8",
+    "onBrandSecondary": "#D84C10",
+    "brandTertiary": "#FFD185",
+    "onBrandTertiary": "#A55200",
+    "success": "#00C853",
+    "onSuccess": "#FFFFFF",
+    "warning": "#FBC02D",
+    "onWarning": "#333333",
+    "error": "#D32F2F",
+    "onError": "#FFFFFF",
+    "border": "#EBE7DF",
+    "borderStrong": "#D4CFC6",
+    "divider": "#EBE7DF",
+    "muted": "#60646C"
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous touch targets (44pt min), playful padding, use controlled asymmetry and avoid dense, purely utilitarian lists.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": 2,
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Bottom tab bar",
+      "Sticky headers over scrolling content",
+      "Modal scrims and floating action buttons (FABs)"
+    ],
+    "dont's": [
+      "Form inputs",
+      "Body content areas",
+      "Dense list rows"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Auth",
+      "purpose": "Welcome and Google Sign-In.",
+      "states": {
+        "loading": "Spinner over button",
+        "empty": "N/A",
+        "error": "Standard error toast"
+      },
+      "layout": "Hero photo spanning the top 50% with a gradient top-to-bottom scrim. Large display text below hero ('Raggiungi i tuoi obiettivi'). Google Sign-In button pinned to the bottom (sticky) with safe-area clearance."
+    },
+    {
+      "name": "Onboarding Chat",
+      "purpose": "Conversational flow where AI collects goal, timeline, constraints, and budget.",
+      "states": {
+        "loading": "Typing indicator (3 dots) in chat bubble",
+        "empty": "Initial greeting message from AI",
+        "error": "Retry sending message button"
+      },
+      "layout": "Full-screen chat interface. Pinned glass header with AI avatar and 'Coach' title. Chat bubbles: AI uses surfaceSecondary, user uses brandSecondary. Input field at bottom wrapped in KeyboardAvoidingView, showing suggested prompt pills ('Voglio dimagrire', 'Migliorare nel lavoro') before typing."
+    },
+    {
+      "name": "Home Plan",
+      "purpose": "Primary dashboard showing active goal progress and daily action plan.",
+      "states": {
+        "loading": "Skeleton of hero card and 3 task rows",
+        "empty": "Illustration of calendar + 'Nessun piano oggi, parla con il coach' CTA",
+        "error": "Error card with 'Riprova' button"
+      },
+      "layout": "Scrollable view. Top section: Hero card with abstract energetic background, showing the main goal, a large circular progress ring, and days remaining. Below: 'Oggi' section. Stacked chunky cards for each daily task. Task cards have a large checkbox on the left, title and time slot on the right, and metric pill (e.g., '20/50'). FAB in bottom right for 'Daily Check-in'."
+    },
+    {
+      "name": "Task Detail Modal",
+      "purpose": "Log precise metrics or quantities for a specific daily action.",
+      "states": {
+        "loading": "Spinner on save button",
+        "empty": "N/A",
+        "error": "Error text below input"
+      },
+      "layout": "Bottom sheet (using @gorhom/bottom-sheet). Oversized numeric input for metrics (e.g., 'Quanti KM hai corso?'). A large sticky primary CTA ('Salva') at the bottom."
+    },
+    {
+      "name": "Progress",
+      "purpose": "Weekly milestones view and metric charts.",
+      "states": {
+        "loading": "Skeleton chart",
+        "empty": "Illustration of climbing a mountain + 'Inizia a completare i task' text",
+        "error": "Error state with retry"
+      },
+      "layout": "Top section: Tab selector (Settimana / Mese). Scrollable list of milestones (using timeline pattern with vertical divider and nodes). Charts use thick, tactile lines and brandPrimary color."
+    }
+  ],
+  "images": {
+    "auth_hero": {
+      "url": "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHwxfHxtb3RpdmF0aW5nJTI0d29ya291dCUyMHJ1bm5pbmclMjBicmlnaHQlMjBzdW5saWdodHxlbnwwfHx8fDE3OTA0MzUzMzB8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Silhouette of people running in bright motivating sunlight"
+    },
+    "google_logo": {
+      "url": "https://images.unsplash.com/photo-1662947190722-5d272f82a526?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzV8MHwxfHNlYXJjaHwxfHxHb29nbGUlMjBsb2dvJTIwcG5nfGVufDB8fHx8MTc5MDQzNTMzMHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Google logo"
+    },
+    "hero_background": {
+      "url": "https://images.unsplash.com/photo-1548504773-429e84f586d2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODB8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMG9yYW5nZSUyMGVuZXJnZXRpYyUyMHZpYnJhbnQlMjB3YXZlcyUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzkwNDM1MzMwfDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Abstract orange energetic waves"
+    },
+    "empty_plan": {
+      "url": "https://images.unsplash.com/photo-1506784983877-45594efa4cbe?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTN8MHwxfHNlYXJjaHwxfHxjYWxlbmRhciUyMGNoZWNrbGlzdCUyMHBsYW5uZXIlMjBmbGF0bGF5fGVufDB8fHx8MTc5MDQzNTMzMHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Calendar planner flatlay"
+    },
+    "ai_avatar": {
+      "url": "https://images.unsplash.com/photo-1740252117070-7aa2955b25f8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NjZ8MHwxfHNlYXJjaHwxfHxmcmllbmRseSUyMHJvYm90JTIwZmFjZSUyMGF2YXRhciUyMDNkfGVufDB8fHx8MTc5MDQzNTMzMHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Friendly 3D robot face avatar"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the Tactile / Playful LIGHT personality. The design must feel energetic, bouncy, and rewarding, not like a dull corporate tracker.",
+    "Do not use any blue, indigo, or purple colors. The main brand color is a vibrant orange (#FF6B35) paired with a deep charcoal text (#111418) for high contrast and energy.",
+    "For the daily task list, ensure the hitSlop on the checkboxes is generous (at least 44x44pt). Use chunky padding (md/lg) on the task cards.",
+    "When placing text over the 'auth_hero' or 'hero_background' images, a gradient-to-dark scrim (top to bottom, transparent to ≥70% surfaceInverse) is MANDATORY to guarantee readability.",
+    "The AI onboarding chat should feel conversational and frictionless. Use suggested prompts as pill buttons just above the input field to get the user started.",
+    "Always pin the primary CTA (like 'Salva' on the Task Detail Modal) to the bottom of the screen, clearing the safe area."
+  ],
+  "haptics": {
+    "task_check": "success",
+    "chat_send": "light",
+    "primary_button_press": "medium",
+    "tab_change": "light"
+  }
+}
