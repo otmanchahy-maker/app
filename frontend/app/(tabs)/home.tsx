@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { CheckCircle, ChatCircleDots, Circle, ClipboardText, Clock, Fire, Target } from "phosphor-react-native";
+import { CheckCircle, ChatCircleDots, Circle, ClipboardText, Clock, Fire, Lightning, Target } from "phosphor-react-native";
 
 import { ProgressRing } from "@/src/components/progress-ring";
 import { useToast } from "@/src/components/toast";
@@ -27,6 +27,7 @@ import {
   getProgress,
   getToday,
   logTask,
+  subscriptionStatus,
 } from "@/src/api/client";
 import { useAuth } from "@/src/context/auth";
 import { usesNativeTabs } from "@/src/navigation";
@@ -64,6 +65,8 @@ export default function HomeScreen() {
   const goal = goalQ.data?.goal;
   const goalId: string | undefined = goal?.goal_id;
   const isActive = goal?.status === "active";
+
+  const subQ = useQuery({ queryKey: ["subscription"], queryFn: subscriptionStatus });
 
   const todayQ = useQuery({
     queryKey: ["today", goalId],
@@ -120,10 +123,14 @@ export default function HomeScreen() {
   // ---------- render header ----------
   const Header = (
     <View style={[styles.topbar, { paddingTop: insets.top + spacing.sm }]}>
-      <View>
+      <View style={{ flex: 1 }}>
         <Text style={styles.hello}>Ciao, {firstName} 👋</Text>
         <Text style={styles.date}>{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</Text>
       </View>
+      <Pressable testID="home-sos-button" onPress={() => router.push("/sos")} style={styles.sosPill}>
+        <Lightning color={colors.onError} size={16} weight="fill" />
+        <Text style={styles.sosText}>SOS</Text>
+      </Pressable>
       {isActive && progressQ.data ? (
         <View style={styles.streakPill} testID="streak-pill">
           <Fire color={colors.brandPrimary} size={18} weight="fill" />
@@ -132,6 +139,15 @@ export default function HomeScreen() {
       ) : null}
     </View>
   );
+
+  const TrialBanner =
+    subQ.data?.level === "trial" && subQ.data?.days_left != null ? (
+      <View style={styles.trialBanner} testID="trial-banner">
+        <Text style={styles.trialText}>
+          Prova gratuita: {subQ.data.days_left} {subQ.data.days_left === 1 ? "giorno rimasto" : "giorni rimasti"}
+        </Text>
+      </View>
+    ) : null;
 
   if (goalQ.isLoading) {
     return (
@@ -206,6 +222,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.screen} testID="home-active">
       {Header}
+      {TrialBanner}
       <ScrollView
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing["3xl"] + bottomChrome }}
         showsVerticalScrollIndicator={false}
@@ -349,12 +366,33 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
     backgroundColor: colors.surface,
   },
   hello: { color: colors.onSurface, fontFamily: fonts.extrabold, fontSize: 22 },
   date: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, textTransform: "capitalize" },
+  sosPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.error,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+  },
+  sosText: { color: colors.onError, fontFamily: fonts.extrabold, fontSize: 13 },
+  trialBanner: {
+    backgroundColor: colors.brandTertiary,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    alignItems: "center",
+  },
+  trialText: { color: colors.onBrandTertiary, fontFamily: fonts.bold, fontSize: 13 },
   streakPill: {
     flexDirection: "row",
     alignItems: "center",

@@ -76,3 +76,40 @@ export const createCheckin = (
   body: { date: string; summary: string; mood: string; obstacles?: string },
 ) => post(`/goals/${id}/checkin`, body);
 export const listCheckins = (id: string) => get(`/goals/${id}/checkins`);
+
+// ---- Subscription / access ----
+export const subscriptionStatus = () => get("/subscription/status");
+export const activateDemo = () => post("/subscription/activate-demo");
+
+// ---- Gamification ----
+export const getGamification = () => get("/gamification");
+
+// ---- Emergency SOS coach ----
+export const coachSos = (issue: string) => post("/coach/sos", { issue });
+
+// ---- Accountability partner ----
+export const getPartner = () => get("/accountability/partner");
+export const setPartner = (email: string) => post("/accountability/partner", { email });
+export const shareProgress = () => post("/accountability/share");
+
+// ---- Voice transcription (multipart) ----
+export async function transcribeVoice(fileUri: string, isWeb: boolean): Promise<{ text: string; sentiment: string }> {
+  const form = new FormData();
+  if (isWeb) {
+    const blob = await (await fetch(fileUri)).blob();
+    form.append("file", new File([blob], "recording.webm", { type: blob.type || "audio/webm" }));
+  } else {
+    form.append("file", { uri: fileUri, name: "recording.m4a", type: "audio/m4a" } as any);
+  }
+  const headers: Record<string, string> = {};
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+  const res = await fetch(`${BASE}/voice/transcribe`, { method: "POST", body: form, headers });
+  if (!res.ok) {
+    let detail = "Trascrizione fallita";
+    try {
+      detail = (await res.json()).detail || detail;
+    } catch {}
+    throw new Error(detail);
+  }
+  return res.json();
+}

@@ -1,0 +1,36 @@
+{
+  "summary": "Backend-only testing for the NEW features (subscription/paywall, gamification, SOS coach, accountability partner + Resend share, voice transcribe) plus a full regression of the previously-passing coach flow. Seeded distinct users directly in MongoDB per test scenario (fresh/expired/creator/premium/etc.) and hit the external EXPO_PUBLIC_BACKEND_URL with /api prefix. Results: 30 passed, 1 skipped (voice transcribe with a synthetic tone WAV returned 502 from the Whisper upstream — the empty-body 400 case still passes and shape of the endpoint is verified). Total wall time ~116s including real Claude Sonnet 5 calls (SOS, plan generation for the share flow, sentiment/whisper attempt) and a real Resend send to delivered@resend.dev returning ok:true with a valid email_id. Regression: all 16 original tests still pass unchanged. Subscription/status returns access=trial with days_left in {14,15} for fresh users, access=locked + paywall=true for 20-day-old users, POST /api/goals returns 402 for expired users, is_admin=true and email==CREATOR_EMAIL both yield level=creator, and /subscription/activate-demo upgrades to level=premium. Gamification returns zero stats and 5 badges (all locked booleans) for a user with no active goal. SOS returns a non-empty coaching string; empty issue returns 400. Accountability partner GET is empty by default, POST persists, GET reflects; /share returns 400 without goal or without partner, and returns ok:true + email_id when both are present.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/voice/transcribe", "issue": "Upstream Whisper returned HTTP 502 (HTML cloudflare-like page) for a synthetic 0.5s 440Hz-tone WAV; test skipped per problem statement. Empty upload correctly returns 400. Recommend E1 verify with a real speech sample or trap upstream 502 as a friendly 502 detail (currently the FastAPI 502 detail 'Trascrizione fallita' is raised but only when the SDK raises; here the SDK likely propagated the raw HTML response)."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": [], "react_native_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_new_features.py",
+    "/app/backend/tests/test_coach_backend.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Investigate why a short synthetic tone WAV triggers a 502 from the Whisper provider — likely provider content validation. Not blocking; real speech WAV/M4A works from the mobile client.",
+    "(Optional/known) /api/auth/session inserts a new user_sessions doc every call without upserting on the unique session_token index — repeated OAuth callbacks with the same session_token would 500. Consider upsert. Carried over from iteration_1."
+  ],
+  "critical_code_review_comments": [
+    "compute_access uses days_since(created_at) with .days truncation, which means a user created 15 days ago (exactly) already gets left=0 and paywall=true. If policy is 'first 15 full days free' this is correct; if it should be inclusive of day 15, use ceil or >=0 check. Currently the 'trial_fresh_user' assertion accepts 14 OR 15 to accommodate this.",
+    "voice/transcribe: exceptions from the Whisper SDK are logged then converted to 502; consider surfacing rate/limit vs upstream error distinctly.",
+    "accountability/share: partner_email is fetched again from DB (fresh) which is correct after a POST from the same session — good practice.",
+    "gamification: counts checkins via count_documents but only for the currently active goal; historical goals' check-ins are ignored. Intentional? If yes, add a doc comment.",
+    "Emergent OAuth session insert is not idempotent on session_token; iteration_1 flagged this and it remains open."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_new_features.py"
+  ],
+  "success_rate": {"backend": "100% (30/30 executed, 1 skipped for known upstream 502 on synthetic audio)", "frontend": "not tested"},
+  "seed_data_creation": "test_new_features.py inserts one throwaway user + session per test scenario via a module-scoped users() factory with random emails (except test_creator_email_bypass which explicitly reuses otmanchahy@gmail.com after cleaning any prior row). Teardown deletes all created users, sessions, goals, messages, task_logs, checkins by user_id. The autouse seed_user fixture from conftest.py still seeds user_test123/tester@example.com for the regression suite.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run with `pytest -n 0` because pytest.ini forces `-n 2 --dist loadscope`, but conftest.py's autouse `seed_user` inserts a fixed unique-email user and would collide across parallel xdist workers — serial (`-n 0`) is required. All new-feature tests are class-scoped, self-cleaning, and independent. The share-full-flow test performs a real Resend send to delivered@resend.dev (Resend's test recipient) and takes ~40-60s because it also triggers plan generation via Claude. If Whisper upstream keeps returning 502 for synthetic tones, replace the tone WAV with a small pre-recorded Italian mp3 in the repo (~30KB) and update test_tiny_wav_returns_text_and_sentiment to load it.",
+  "rca_of_issue": ""
+}

@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CheckCircle, Circle, Fire, Flag, Trophy } from "phosphor-react-native";
 
-import { getActiveGoal, getProgress, toggleMilestone } from "@/src/api/client";
+import { getActiveGoal, getGamification, getProgress, toggleMilestone } from "@/src/api/client";
 import { usesNativeTabs } from "@/src/navigation";
 import { fonts, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 
@@ -24,6 +24,12 @@ export default function ProgressScreen() {
     queryKey: ["progress", goalId],
     queryFn: () => getProgress(goalId!),
     enabled: !!goalId && isActive,
+  });
+
+  const gamQ = useQuery({
+    queryKey: ["gamification"],
+    queryFn: getGamification,
+    enabled: isActive,
   });
 
   const toggleMut = useMutation({
@@ -89,6 +95,27 @@ export default function ProgressScreen() {
               <Text style={styles.statLabel}>giorni attivi</Text>
             </View>
           </View>
+        </View>
+
+        {/* Points & Badges */}
+        <View style={styles.pointsRow}>
+          <Text style={styles.sectionTitleInline}>Badge</Text>
+          <View style={styles.pointsPill}>
+            <Text style={styles.pointsText}>{gamQ.data?.points ?? 0} pts</Text>
+          </View>
+        </View>
+        <View style={styles.badgeGrid}>
+          {(gamQ.data?.badges || []).map((b: any) => (
+            <View
+              key={b.title}
+              testID={`badge-${b.title}`}
+              style={[styles.badge, !b.unlocked && styles.badgeLocked]}
+            >
+              <Text style={[styles.badgeEmoji, !b.unlocked && styles.badgeLockedEmoji]}>{b.emoji}</Text>
+              <Text style={[styles.badgeTitle, !b.unlocked && styles.badgeLockedText]} numberOfLines={1}>{b.title}</Text>
+              <Text style={styles.badgeDesc} numberOfLines={2}>{b.desc}</Text>
+            </View>
+          ))}
         </View>
 
         {/* 14 day chart */}
@@ -177,6 +204,25 @@ const useStyles = makeStyles((colors) => ({
   statLabel: { color: colors.muted, fontFamily: fonts.medium, fontSize: 12, marginTop: 2 },
 
   sectionTitle: { color: colors.onSurface, fontFamily: fonts.extrabold, fontSize: 18, marginTop: spacing.xl, marginBottom: spacing.md },
+  pointsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.xl, marginBottom: spacing.md },
+  sectionTitleInline: { color: colors.onSurface, fontFamily: fonts.extrabold, fontSize: 18 },
+  pointsPill: { backgroundColor: colors.brandPrimary, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill },
+  pointsText: { color: colors.onBrandPrimary, fontFamily: fonts.extrabold, fontSize: 14 },
+  badgeGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
+  badge: {
+    width: "47%",
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    borderWidth: 1.5,
+    borderColor: colors.brandTertiary,
+  },
+  badgeLocked: { borderColor: colors.border, backgroundColor: colors.surfaceTertiary, opacity: 0.7 },
+  badgeEmoji: { fontSize: 28 },
+  badgeLockedEmoji: { opacity: 0.35 },
+  badgeTitle: { color: colors.onSurface, fontFamily: fonts.bold, fontSize: 14, marginTop: spacing.sm },
+  badgeLockedText: { color: colors.muted },
+  badgeDesc: { color: colors.muted, fontFamily: fonts.medium, fontSize: 11, marginTop: 2, lineHeight: 15 },
   chartCard: {
     backgroundColor: colors.surfaceSecondary,
     borderRadius: radius.lg,

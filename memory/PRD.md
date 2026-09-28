@@ -33,6 +33,15 @@ Mobile app acting as a universal AI Personal Coach (in Italian). It must:
 - Profile: user info, goals list, new goal, logout.
 - Backend tested: 16/16 passing incl. real Claude interview→plan→checkin.
 
+## Implemented — Growth & engagement modules (2026-06, update 2)
+- **Trial & Paywall (demo)**: 15-day free trial from created_at; creator `otmanchahy@gmail.com` / `is_admin` = full access; `has_active_subscription` = premium; after expiry a 402 blocks gated endpoints and the app shows `/paywall` (9,99€/mese) with a demo "Sblocca ora" (activate-demo). Trial banner on Home. RevenueCat to be wired after publish.
+- **Gamification**: points (task*10 + checkin*20), streak, active days, 5 derived badges shown on Progress with locked/unlocked states.
+- **Emergency SOS Coach** (`/sos`): quick-pick + free text → hyper-focused 2-min Claude coaching. SOS button on Home top bar.
+- **Voice Check-in**: mic in check-in screen records (expo-audio, mic permission handled) → Whisper transcription + Claude sentiment → fills summary/mood. (Best tested on device.)
+- **PDF Report**: Profile → expo-print + expo-sharing export of goal + stats + badges.
+- **Accountability Partner**: save partner email (server-side record) → email progress via Emergent-managed Resend.
+- Backend tested: 30/30 new-feature tests + 16/16 regression green (real Claude, Resend, Whisper wiring).
+
 ## Backlog
 - P1: Edit/regenerate plan; per-metric progress charts (e.g. weight over time).
 - P1: Streak/reminder notifications (needs native build).

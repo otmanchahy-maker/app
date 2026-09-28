@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="1" tests="14" time="54.231" timestamp="2026-09-28T07:44:19.507313+00:00" hostname="agent-env-23e21524-d83d-4bfa-87ac-b40e8eafbbe0"><testcase classname="tests.test_new_features.TestSubscription" name="test_trial_fresh_user" time="0.213" /><testcase classname="tests.test_new_features.TestSubscription" name="test_trial_expired_blocks_gated_endpoint" time="0.188" /><testcase classname="tests.test_new_features.TestSubscription" name="test_creator_bypass" time="0.001"><failure message="pymongo.errors.DuplicateKeyError: E11000 duplicate key error collection: test_database.users index: email_1 dup key: { email: &quot;otmanchahy@gmail.com&quot; }, full error: {'index': 0, 'code': 11000, 'errmsg': 'E11000 duplicate key error collection: test_database.users index: email_1 dup key: { email: &quot;otmanchahy@gmail.com&quot; }', 'keyPattern': {'email': 1}, 'keyValue': {'email': 'otmanchahy@gmail.com'}}">backend/tests/test_new_features.py:116: in test_creator_bypass
+    _, token = users(email="otmanchahy@gmail.com", created_days_ago=30,
+backend/tests/test_new_features.py:58: in factory
+    uid, token = _seed_user(mongo_client, **kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_new_features.py:27: in _seed_user
+    mongo.users.insert_one({
+/root/.venv/lib/python3.11/site-packages/pymongo/collection.py:669: in insert_one
+    self._insert_one(
+/root/.venv/lib/python3.11/site-packages/pymongo/collection.py:609: in _insert_one
+    self.__database.client._retryable_write(acknowledged, _insert_command, session)
+/root/.venv/lib/python3.11/site-packages/pymongo/mongo_client.py:1523: in _retryable_write
+    return self._retry_with_session(retryable, func, s, bulk)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/pymongo/mongo_client.py:1421: in _retry_with_session
+    return self._retry_internal(
+/root/.venv/lib/python3.11/site-packages/pymongo/_csot.py:107: in csot_wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/pymongo/mongo_client.py:1462: in _retry_internal
+    ).run()
+      ^^^^^
+/root/.venv/lib/python3.11/site-packages/pymongo/mongo_client.py:2315: in run
+    return self._read() if self._is_read else self._write()
+                                              ^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/pymongo/mongo_client.py:2423: in _write
+    return self._func(self._session, conn, self._retryable)  # type: ignore
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/pymongo/collection.py:607: in _insert_command
+    _check_write_command_response(result)
+/root/.venv/lib/python3.11/site-packages/pymongo/helpers.py:266: in _check_write_command_response
+    _raise_last_write_error(write_errors)
+/root/.venv/lib/python3.11/site-packages/pymongo/helpers.py:238: in _raise_last_write_error
+    raise DuplicateKeyError(error.get("errmsg"), 11000, error)
+E   pymongo.errors.DuplicateKeyError: E11000 duplicate key error collection: test_database.users index: email_1 dup key: { email: "otmanchahy@gmail.com" }, full error: {'index': 0, 'code': 11000, 'errmsg': 'E11000 duplicate key error collection: test_database.users index: email_1 dup key: { email: "otmanchahy@gmail.com" }', 'keyPattern': {'email': 1}, 'keyValue': {'email': 'otmanchahy@gmail.com'}}</failure></testcase><testcase classname="tests.test_new_features.TestSubscription" name="test_activate_demo_upgrades_to_premium" time="0.212" /><testcase classname="tests.test_new_features.TestGamification" name="test_gamification_no_active_goal" time="0.111" /><testcase classname="tests.test_new_features.TestSOS" name="test_sos_returns_coaching" time="8.083" /><testcase classname="tests.test_new_features.TestSOS" name="test_sos_empty_returns_400" time="0.151" /><testcase classname="tests.test_new_features.TestAccountabilityPartner" name="test_get_partner_empty_default" time="0.088" /><testcase classname="tests.test_new_features.TestAccountabilityPartner" name="test_set_and_get_partner" time="0.171" /><testcase classname="tests.test_new_features.TestAccountabilityPartner" name="test_share_without_goal_returns_400" time="0.112" /><testcase classname="tests.test_new_features.TestAccountabilityPartner" name="test_share_without_partner_returns_400" time="0.113" /><testcase classname="tests.test_new_features.TestAccountabilityPartner" name="test_share_full_flow_sends_email" time="44.205" /><testcase classname="tests.test_new_features.TestVoiceTranscribe" name="test_empty_upload_returns_400" time="0.329" /><testcase classname="tests.test_new_features.TestVoiceTranscribe" name="test_tiny_wav_returns_text_and_sentiment" time="0.133"><skipped type="pytest.skip" message="Whisper returned 502: &lt;!DOCTYPE html&gt;&#10;&lt;!--[if lt IE 7]&gt; &lt;html class=&quot;no-js ie6 oldie&quot; lang=&quot;en-US&quot;&gt; &lt;![endif]--&gt;&#10;&lt;!--[if IE 7]&gt;    &lt;html class=&quot;no-js ie7 oldie&quot; lang=&quot;en-US&quot;&gt; &lt;![endif]--&gt;&#10;&lt;!--[if IE 8]&gt;    &lt;html class=&quot;no-">/app/backend/tests/test_new_features.py:331: Whisper returned 502: &lt;!DOCTYPE html&gt;
+&lt;!--[if lt IE 7]&gt; &lt;html class="no-js ie6 oldie" lang="en-US"&gt; &lt;![endif]--&gt;
+&lt;!--[if IE 7]&gt;    &lt;html class="no-js ie7 oldie" lang="en-US"&gt; &lt;![endif]--&gt;
+&lt;!--[if IE 8]&gt;    &lt;html class="no-</skipped></testcase></testsuite></testsuites>

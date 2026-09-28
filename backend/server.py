@@ -1,19 +1,26 @@
 import os
+import re
 import json
 import uuid
 import logging
+import tempfile
+import ipaddress
+from html import escape as html_escape
+from html.parser import HTMLParser
+from urllib.parse import urlparse
 from pathlib import Path
 from datetime import datetime, timezone, timedelta, date as date_cls
 from typing import List, Optional, Annotated, Any
 
-from fastapi import FastAPI, APIRouter, Header, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, Header, HTTPException, Depends, File, UploadFile
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, Field, BeforeValidator
+from pydantic import BaseModel, Field, BeforeValidator, EmailStr
 import httpx
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.openai import OpenAISpeechToText
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -28,6 +35,16 @@ db = client[os.environ["DB_NAME"]]
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 AI_MODEL = ("anthropic", "claude-sonnet-5")
 EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+
+CREATOR_EMAIL = os.environ.get("CREATOR_EMAIL", "otmanchahy@gmail.com").lower()
+TRIAL_DAYS = 15
+
+# Email (Emergent-managed Resend)
+EMAIL_BASE_URL = "https://integrations.emergentagent.com"
+EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY", "")
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "AI Personal Coach")
+
+stt_client = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -95,6 +112,18 @@ CHECKIN_SYSTEM = (
     "Dai un feedback motivante e concreto: riconosci i progressi, affronta gli ostacoli con soluzioni pratiche, "
     "e suggerisci come proseguire nei prossimi giorni per raggiungere l'obiettivo nel minor tempo possibile. "
     "Rispondi in italiano, massimo 120 parole, tono energico."
+)
+
+SOS_SYSTEM = (
+    "Sei il Coach di Emergenza (modalità SOS 2 minuti). L'utente è bloccato, demotivato o in difficoltà ADESSO. "
+    "Dai una micro-sessione di coaching iper-focalizzata e immediatamente attuabile: "
+    "1) una frase che normalizza/riconosce, 2) UNA singola azione da fare nei prossimi 2 minuti, "
+    "3) una frase di spinta finale. Massimo 90 parole, tono deciso e caldo, in italiano. Niente elenchi lunghi."
+)
+
+SENTIMENT_SYSTEM = (
+    "Analizza il sentiment del testo dell'utente. Rispondi con UNA sola parola tra: "
+    "positivo, neutro, negativo. Nient'altro."
 )
 
 
@@ -189,9 +218,13 @@ async def auth_session(body: SessionRequest):
         raise HTTPException(status_code=401, detail="Invalid session data")
 
     existing = await db.users.find_one({"email": email}, {"_id": 0})
+    is_admin = email.lower() == CREATOR_EMAIL
     if existing:
         user_id = existing["user_id"]
-        await db.users.update_one({"user_id": user_id}, {"$set": {"name": name, "picture": picture}})
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {"name": name, "picture": picture, "is_admin": is_admin}},
+        )
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         await db.users.insert_one({
@@ -199,15 +232,22 @@ async def auth_session(body: SessionRequest):
             "email": email,
             "name": name,
             "picture": picture,
+            "is_admin": is_admin,
+            "has_active_subscription": False,
+            "partner_email": "",
             "created_at": now_utc().isoformat(),
         })
 
-    await db.user_sessions.insert_one({
-        "session_token": session_token,
-        "user_id": user_id,
-        "created_at": now_utc(),
-        "expires_at": now_utc() + timedelta(days=7),
-    })
+    await db.user_sessions.update_one(
+        {"session_token": session_token},
+        {"$set": {
+            "session_token": session_token,
+            "user_id": user_id,
+            "created_at": now_utc(),
+            "expires_at": now_utc() + timedelta(days=7),
+        }},
+        upsert=True,
+    )
 
     return {
         "session_token": session_token,
@@ -217,7 +257,7 @@ async def auth_session(body: SessionRequest):
 
 @api_router.get("/auth/me")
 async def auth_me(user: dict = Depends(get_current_user)):
-    return {"user": user}
+    return {"user": user, "access": compute_access(user)}
 
 
 @api_router.post("/auth/logout")
@@ -225,6 +265,51 @@ async def auth_logout(authorization: Optional[str] = Header(None)):
     if authorization and authorization.startswith("Bearer "):
         token = authorization.split(" ", 1)[1].strip()
         await db.user_sessions.delete_one({"session_token": token})
+    return {"ok": True}
+
+
+def days_since(created_at: Any) -> int:
+    if isinstance(created_at, str):
+        try:
+            dt = datetime.fromisoformat(created_at)
+        except ValueError:
+            return 0
+    elif isinstance(created_at, datetime):
+        dt = created_at
+    else:
+        return 0
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return (now_utc() - dt).days
+
+
+def compute_access(user: dict) -> dict:
+    if user.get("is_admin") or user.get("email", "").lower() == CREATOR_EMAIL:
+        return {"access": "full", "level": "creator", "days_left": None, "paywall": False}
+    if user.get("has_active_subscription"):
+        return {"access": "full", "level": "premium", "days_left": None, "paywall": False}
+    used = days_since(user.get("created_at"))
+    left = TRIAL_DAYS - used
+    if left > 0:
+        return {"access": "trial", "level": "trial", "days_left": left, "paywall": False}
+    return {"access": "locked", "level": "expired", "days_left": 0, "paywall": True, "price": "9.99€/mese"}
+
+
+async def require_access(user: dict = Depends(get_current_user)) -> dict:
+    acc = compute_access(user)
+    if acc["paywall"]:
+        raise HTTPException(status_code=402, detail="Prova gratuita terminata. Abbonati per continuare.")
+    return user
+
+
+@api_router.get("/subscription/status")
+async def subscription_status(user: dict = Depends(get_current_user)):
+    return compute_access(user)
+
+
+@api_router.post("/subscription/activate-demo")
+async def activate_demo(user: dict = Depends(get_current_user)):
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"has_active_subscription": True}})
     return {"ok": True}
 
 
@@ -237,7 +322,7 @@ def clean_goal(g: dict) -> dict:
 
 
 @api_router.post("/goals")
-async def create_goal(user: dict = Depends(get_current_user)):
+async def create_goal(user: dict = Depends(require_access)):
     goal_id = f"goal_{uuid.uuid4().hex[:12]}"
     goal = {
         "goal_id": goal_id,
@@ -342,7 +427,7 @@ def build_transcript(messages: List[dict]) -> str:
 
 
 @api_router.post("/goals/{goal_id}/messages")
-async def post_message(goal_id: str, body: MessageCreate, user: dict = Depends(get_current_user)):
+async def post_message(goal_id: str, body: MessageCreate, user: dict = Depends(require_access)):
     goal = await _get_goal_or_404(goal_id, user)
     content = body.content.strip()
     if not content:
@@ -407,7 +492,7 @@ async def post_message(goal_id: str, body: MessageCreate, user: dict = Depends(g
 # Plan generation
 # ---------------------------------------------------------------------------
 @api_router.post("/goals/{goal_id}/generate-plan")
-async def generate_plan(goal_id: str, user: dict = Depends(get_current_user)):
+async def generate_plan(goal_id: str, user: dict = Depends(require_access)):
     goal = await _get_goal_or_404(goal_id, user)
 
     history = await db.messages.find(
@@ -609,7 +694,7 @@ async def toggle_milestone(goal_id: str, milestone_id: str, user: dict = Depends
 # Check-in
 # ---------------------------------------------------------------------------
 @api_router.post("/goals/{goal_id}/checkin")
-async def create_checkin(goal_id: str, body: CheckInCreate, user: dict = Depends(get_current_user)):
+async def create_checkin(goal_id: str, body: CheckInCreate, user: dict = Depends(require_access)):
     goal = await _get_goal_or_404(goal_id, user)
     tasks = await build_today(goal, user["user_id"], body.date)
     completed = sum(1 for t in tasks if t["completed"])
@@ -664,6 +749,246 @@ async def list_checkins(goal_id: str, user: dict = Depends(get_current_user)):
         {"goal_id": goal_id, "user_id": user["user_id"]}, {"_id": 0}
     ).sort("created_at", -1).to_list(200)
     return {"checkins": checkins}
+
+
+# ---------------------------------------------------------------------------
+# Gamification
+# ---------------------------------------------------------------------------
+async def _stats_for_goal(goal: dict, user_id: str) -> dict:
+    total_tasks = len(goal.get("daily_tasks", []))
+    day_logs = await db.task_logs.find(
+        {"goal_id": goal["goal_id"], "user_id": user_id}, {"_id": 0}
+    ).to_list(5000)
+    by_date: dict = {}
+    for l in day_logs:
+        by_date.setdefault(l["date"], []).append(l)
+    today = now_utc().date()
+    streak = 0
+    if total_tasks:
+        i = 0
+        while True:
+            d = (today - timedelta(days=i)).strftime("%Y-%m-%d")
+            logs = by_date.get(d, [])
+            done = sum(1 for l in logs if l.get("completed"))
+            if done >= total_tasks:
+                streak += 1
+                i += 1
+            else:
+                break
+    total_completed = sum(1 for l in day_logs if l.get("completed"))
+    active_days = len([d for d, logs in by_date.items() if any(l.get("completed") for l in logs)])
+    return {"streak": streak, "total_completed": total_completed, "active_days": active_days}
+
+
+@api_router.get("/gamification")
+async def gamification(user: dict = Depends(get_current_user)):
+    goal = await db.goals.find_one(
+        {"user_id": user["user_id"], "deleted_at": None, "status": "active"},
+        {"_id": 0},
+        sort=[("created_at", -1)],
+    )
+    if not goal:
+        stats = {"streak": 0, "total_completed": 0, "active_days": 0}
+        checkins_count = 0
+    else:
+        stats = await _stats_for_goal(goal, user["user_id"])
+        checkins_count = await db.checkins.count_documents(
+            {"goal_id": goal["goal_id"], "user_id": user["user_id"]}
+        )
+    points = stats["total_completed"] * 10 + checkins_count * 20
+    badges = [
+        {"title": "Primo Passo", "emoji": "👣", "desc": "Completa la prima attività", "unlocked": stats["total_completed"] >= 1},
+        {"title": "Costanza", "emoji": "💪", "desc": "3 giorni attivi", "unlocked": stats["active_days"] >= 3},
+        {"title": "Settimana di Fuoco", "emoji": "🏆", "desc": "7 giorni di fila", "unlocked": stats["streak"] >= 7},
+        {"title": "Riflessivo", "emoji": "📋", "desc": "5 check-in completati", "unlocked": checkins_count >= 5},
+        {"title": "Centurione", "emoji": "⭐", "desc": "Raggiungi 100 punti", "unlocked": points >= 100},
+    ]
+    return {"points": points, **stats, "checkins": checkins_count, "badges": badges}
+
+
+# ---------------------------------------------------------------------------
+# Emergency Coach (SOS)
+# ---------------------------------------------------------------------------
+class SosRequest(BaseModel):
+    issue: str
+
+
+@api_router.post("/coach/sos")
+async def coach_sos(body: SosRequest, user: dict = Depends(require_access)):
+    issue = body.issue.strip()
+    if not issue:
+        raise HTTPException(status_code=400, detail="Descrivi cosa ti blocca.")
+    try:
+        coaching = await call_llm(SOS_SYSTEM, f"Situazione dell'utente: {issue}", session_id=f"sos-{user['user_id']}")
+    except Exception:
+        logger.exception("SOS LLM error")
+        raise HTTPException(status_code=502, detail="Coach non disponibile, riprova.")
+    return {"coaching": coaching}
+
+
+# ---------------------------------------------------------------------------
+# Voice check-in transcription (Whisper) + sentiment
+# ---------------------------------------------------------------------------
+@api_router.post("/voice/transcribe")
+async def voice_transcribe(file: UploadFile = File(...), user: dict = Depends(require_access)):
+    if stt_client is None:
+        raise HTTPException(status_code=503, detail="Trascrizione non configurata.")
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Audio vuoto.")
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio troppo grande.")
+    suffix = Path(file.filename or "rec.m4a").suffix.lower()
+    if suffix not in {".m4a", ".mp4", ".mp3", ".wav", ".webm", ".ogg", ".mpeg", ".mpga"}:
+        suffix = ".webm" if "webm" in (file.content_type or "") else ".m4a"
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(data)
+            temp_path = tmp.name
+        result = await stt_client.transcribe(temp_path)
+        text = result if isinstance(result, str) else (result.get("text", "") if isinstance(result, dict) else str(result))
+    except Exception:
+        logger.exception("Whisper error")
+        raise HTTPException(status_code=502, detail="Trascrizione fallita, riprova.")
+    finally:
+        if temp_path:
+            try:
+                os.unlink(temp_path)
+            except FileNotFoundError:
+                pass
+
+    sentiment = "neutro"
+    if text.strip():
+        try:
+            s = await call_llm(SENTIMENT_SYSTEM, text, session_id=f"sent-{user['user_id']}")
+            s = s.strip().lower()
+            for k in ("positivo", "negativo", "neutro"):
+                if k in s:
+                    sentiment = k
+                    break
+        except Exception:
+            pass
+    return {"text": text, "sentiment": sentiment}
+
+
+# ---------------------------------------------------------------------------
+# Accountability partner (Resend email)
+# ---------------------------------------------------------------------------
+_SHORTENERS = ("bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly", "goo.gl", "rebrand.ly")
+
+
+class _EmailScan(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.tags, self.urls = set(), []
+
+    def handle_starttag(self, tag, attrs):
+        self.tags.add(tag.lower())
+        self.urls += [v for k, v in attrs if k.lower() in ("href", "src") and v]
+
+
+def _host_ok(host: str) -> bool:
+    if not host or "xn--" in host:
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return False
+    except ValueError:
+        pass
+    return not any(host == s or host.endswith("." + s) for s in _SHORTENERS)
+
+
+def _assert_safe_email(subject: str, html: str) -> None:
+    scan = _EmailScan()
+    scan.feed(html)
+    if scan.tags & {"form", "input", "textarea", "select"}:
+        raise ValueError("No forms in email")
+    for url in scan.urls:
+        low = url.strip().lower()
+        if low.startswith(("mailto:", "tel:", "cid:", "#")):
+            continue
+        if not low.startswith("https://"):
+            raise ValueError("Email links must be https")
+        host = urlparse(low).hostname or ""
+        if not _host_ok(host) or urlparse(low).username is not None:
+            raise ValueError("Unsafe URL in email")
+
+
+async def send_email(*, to: str, subject: str, html: str) -> Optional[str]:
+    _assert_safe_email(subject, html)
+    payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
+    async with httpx.AsyncClient(timeout=30) as hc:
+        resp = await hc.post(
+            f"{EMAIL_BASE_URL}/api/v1/email/send",
+            headers={"X-Email-Key": EMAIL_KEY},
+            json=payload,
+        )
+    resp.raise_for_status()
+    return resp.json().get("id")
+
+
+class PartnerRequest(BaseModel):
+    email: EmailStr
+
+
+@api_router.get("/accountability/partner")
+async def get_partner(user: dict = Depends(get_current_user)):
+    return {"partner_email": user.get("partner_email", "")}
+
+
+@api_router.post("/accountability/partner")
+async def set_partner(body: PartnerRequest, user: dict = Depends(get_current_user)):
+    await db.users.update_one(
+        {"user_id": user["user_id"]}, {"$set": {"partner_email": str(body.email)}}
+    )
+    return {"partner_email": str(body.email)}
+
+
+@api_router.post("/accountability/share")
+async def share_progress(user: dict = Depends(require_access)):
+    fresh = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    partner = (fresh or {}).get("partner_email", "").strip()
+    if not partner:
+        raise HTTPException(status_code=400, detail="Aggiungi prima l'email del tuo partner.")
+    goal = await db.goals.find_one(
+        {"user_id": user["user_id"], "deleted_at": None, "status": "active"},
+        {"_id": 0},
+        sort=[("created_at", -1)],
+    )
+    if not goal:
+        raise HTTPException(status_code=400, detail="Nessun obiettivo attivo da condividere.")
+    stats = await _stats_for_goal(goal, user["user_id"])
+    today = await build_today(goal, user["user_id"], today_str())
+    done_today = sum(1 for t in today if t["completed"])
+
+    name = html_escape(user.get("name") or "Il tuo amico")
+    title = html_escape(goal.get("title", ""))
+    target = html_escape(goal.get("target_summary", ""))
+
+    html = (
+        f'<table role="presentation" width="100%" style="max-width:560px"><tr><td '
+        f'style="padding:24px;font-family:Arial,sans-serif;color:#111418">'
+        f'<h2 style="color:#FF6B35;margin:0 0 8px">Progressi di {name} 🚀</h2>'
+        f'<p style="margin:0 0 16px">Obiettivo: <strong>{title}</strong><br>{target}</p>'
+        f'<table role="presentation" width="100%" style="border-collapse:collapse">'
+        f'<tr><td style="padding:12px;background:#FFE3D8;border-radius:8px">'
+        f'🔥 <strong>{stats["streak"]}</strong> giorni di fila &nbsp;|&nbsp; '
+        f'✅ <strong>{done_today}/{len(today)}</strong> attività oggi &nbsp;|&nbsp; '
+        f'📈 <strong>{stats["total_completed"]}</strong> task totali</td></tr></table>'
+        f'<p style="margin:16px 0 0">Fai un tifo per {name}! 💪</p>'
+        f'<p style="font-size:12px;color:#888;margin-top:24px">Inviato tramite AI Personal Coach. '
+        f'Non chiediamo mai password o dati di pagamento via email.</p>'
+        f'</td></tr></table>'
+    )
+    try:
+        email_id = await send_email(to=partner, subject=f"I progressi di {user.get('name') or 'un amico'} su AI Personal Coach", html=html)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Email share error")
+        raise HTTPException(status_code=502, detail="Invio email fallito, riprova.")
+    return {"ok": True, "email_id": email_id, "partner": partner}
 
 
 @api_router.get("/")

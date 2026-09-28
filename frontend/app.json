@@ -9,14 +9,18 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.goaltrackerai.wq63ov"
+      "bundleIdentifier": "com.emergent.goaltrackerai.wq63ov",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Registra check-in vocali per il tuo coach"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.emergent.goaltrackerai.wq63ov"
+      "package": "com.emergent.goaltrackerai.wq63ov",
+      "permissions": ["RECORD_AUDIO"]
     },
     "web": {
       "bundler": "metro",
@@ -38,7 +42,9 @@
       "expo-image",
       "expo-secure-store",
       "expo-web-browser",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-audio",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true
