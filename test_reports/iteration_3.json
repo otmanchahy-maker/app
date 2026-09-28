@@ -1,0 +1,39 @@
+{
+  "summary": "Backend-only testing for iteration 3 changes: (a) trial reduced to 14 days, (b) feature-level premium gating (core endpoints FREE for expired users; only SOS/TTS/voice-transcribe gated with 402), (c) new POST /api/tts + GET /api/tts/{key}.mp3, (d) new POST /api/settings/voice (male=onyx, female=nova). Wrote /app/backend/tests/test_iteration3.py with 16 new tests and updated 2 outdated asserts in /app/backend/tests/test_new_features.py (fresh trial days_left is now {13,14}, and POST /api/goals is no longer 402 for expired users). Full suite: 46 passed, 1 skipped (pre-existing Whisper synthetic-tone 502 quirk carried over from iteration 2, unrelated). Verified with a real Emergent Google user seeded directly in Mongo per scenario against the external EXPO_PUBLIC_BACKEND_URL. Key confirmations: fresh user -> access=trial, level=trial, paywall=false, days_left in {13,14}; 20-day-old user -> access=locked + paywall=true; expired user CAN create goal (200), run 3 interview turns (200), generate-plan (200, real Claude Sonnet 5), read /today (200), log a task (200), submit /checkin (200, real LLM feedback), set partner and /accountability/share (200, real Resend email sent to delivered@resend.dev); expired user CANNOT hit /coach/sos (402), /tts (402), or /voice/transcribe (402 - premium check runs before body read so an empty file still 402s). Creator email otmanchahy@gmail.com -> access=full, level=creator, and /coach/sos returns non-empty coaching (200). Voice settings: POST /api/settings/voice {male|female} persists and drives TTS voice (male=onyx, female=nova). POST /api/tts with 'Ciao, questo è un test' returns {url:/api/tts/<sha256>.mp3, voice}; GET that url returns 200 with content-type audio/mpeg and >500 bytes of real audio. Cache hit: second identical POST returns same url in <8s (validated). Empty/whitespace/emoji-only text -> 400. Unknown TTS key -> 404. Regression: all 16 original coach tests and all 14 iteration-2 tests continue to pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/voice/transcribe", "issue": "Pre-existing (iteration 2): synthetic 440Hz-tone WAV triggers upstream Whisper 502. Empty-body 400 case still verified. Not related to iteration 3 changes."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": [], "react_native_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/test_new_features.py",
+    "/app/backend/tests/test_coach_backend.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_iteration3.xml",
+    "/app/test_reports/pytest/pytest_full_iteration3.xml"
+  ],
+  "action_items": [
+    "(Optional) Auth session insert not idempotent on unique session_token (carried over from iteration 1/2). Repeated OAuth callbacks with same session_token would 500. Consider upsert in POST /api/auth/session (existing user_sessions.update_one is upsert-based already but insert path uses insert_one earlier at signup; a same-session_token replay would still race). Not blocking.",
+    "(Optional) Whisper 502 on synthetic tone WAV — replace test tone with a small pre-recorded Italian mp3 or trap upstream 502 more gracefully. Not iteration-3 scope."
+  ],
+  "critical_code_review_comments": [
+    "compute_access with TRIAL_DAYS=14 uses days_since(created_at).days truncation. A user created 0 minutes ago -> days=0 -> left=14; a user created 14 days ago -> left=0 -> paywall=true. Confirmed by tests (13,14 accepted for fresh; 0 for 20-day-old).",
+    "require_premium is a proper Depends chain around get_current_user — the 402 check happens BEFORE reading the multipart body in /voice/transcribe (verified: empty upload from an expired user returns 402, not 400).",
+    "TTS cache key is SHA256(text|voice|model|format) which correctly invalidates when the user switches voice_gender. Cache doc stores raw bytes under `audio` field; GET streams them via fastapi.Response with audio/mpeg. Consider a TTL and/or user-scoped rate limit to bound Mongo growth.",
+    "clean_for_tts strips emojis/urls/markdown then trims to 4000 chars. Whitespace-only after cleanup correctly returns 400 (verified).",
+    "/settings/voice silently falls back to 'female' if voice_gender is not male/female. Consider 422 for invalid enums so the client can surface a validation error."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/test_new_features.py"
+  ],
+  "success_rate": {"backend": "100% (46/46 executed pass, 1 pre-existing skip)", "frontend": "not tested (backend-only per request)"},
+  "seed_data_creation": "test_iteration3.py seeds one throwaway user + session per scenario via a module-scoped users() factory (random emails per test, or the fixed CREATOR_EMAIL for the creator-bypass test after cleaning any prior row). Teardown deletes all created users, sessions, goals, messages, task_logs, checkins by user_id.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run pytest with `-n 0` (pytest.ini defaults to `-n 2 --dist loadscope` but conftest.py autouse seed_user collides across xdist workers). New iteration-3 tests: /app/backend/tests/test_iteration3.py (16 tests). Real integrations exercised: Claude Sonnet 5 via emergentintegrations LlmChat (interview/plan/checkin/SOS), OpenAI TTS tts-1 (male=onyx, female=nova), Resend email (delivered@resend.dev). Full-suite wall time ~170s. If TRIAL_DAYS is changed again, update TestTrial14Days.test_fresh_user_has_14_or_13_days_left assertion. If TTS voice map changes, update onyx/nova assertions in TestVoiceSettingsAndTTS.",
+  "rca_of_issue": ""
+}

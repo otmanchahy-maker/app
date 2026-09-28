@@ -40,7 +40,7 @@ export default function RootLayout() {
             <KeyboardProvider>
               <AuthProvider>
                 <ToastProvider>
-                  <StatusBar style="dark" />
+                  <StatusBar style="light" />
                   <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: themes.light.surface } }} />
                 </ToastProvider>
               </AuthProvider>

@@ -5,11 +5,13 @@ import { ActivityIndicator, Linking, Platform, Pressable, Text, TextInput, View 
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from "expo-audio";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { CaretLeft, CheckCircle, Microphone, Sparkle, Stop } from "phosphor-react-native";
+import { CaretLeft, CheckCircle, Microphone, SpeakerHigh, Sparkle, Stop } from "phosphor-react-native";
 
 import { useToast } from "@/src/components/toast";
 import { PrimaryButton } from "@/src/components/ui";
 import { createCheckin, getActiveGoal, getToday, transcribeVoice } from "@/src/api/client";
+import { speak, stopSpeech } from "@/src/audio/tts";
+import { useAccess } from "@/src/hooks/use-access";
 import { fonts, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 
 const MOODS = [
@@ -50,9 +52,11 @@ export default function CheckinScreen() {
   const [transcribing, setTranscribing] = useState(false);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const { locked } = useAccess();
 
   useEffect(() => {
     setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true }).catch(() => {});
+    return () => stopSpeech();
   }, []);
 
   const checkinMut = useMutation({
@@ -114,8 +118,19 @@ export default function CheckinScreen() {
 
   const handleMic = () => {
     if (transcribing) return;
+    if (locked) {
+      router.push("/paywall");
+      return;
+    }
     if (recording) stopRecording();
     else startRecording();
+  };
+
+  const listenFeedback = async () => {
+    if (!feedback) return;
+    const r = await speak(feedback);
+    if (r.locked) router.push("/paywall");
+    else if (!r.ok) toast(r.error || "Riproduzione fallita", "error");
   };
 
   if (goalQ.isLoading) {
@@ -143,10 +158,18 @@ export default function CheckinScreen() {
             <Text style={styles.feedbackText}>{feedback}</Text>
           </View>
           <PrimaryButton
+            testID="checkin-listen-button"
+            label="Ascolta il feedback"
+            variant="secondary"
+            icon={<SpeakerHigh color={colors.onBrandSecondary} size={18} weight="fill" />}
+            onPress={listenFeedback}
+            style={{ alignSelf: "stretch", marginTop: spacing.lg }}
+          />
+          <PrimaryButton
             testID="checkin-done-button"
             label="Torna al piano"
             onPress={() => router.replace("/home")}
-            style={{ alignSelf: "stretch", marginTop: spacing.xl }}
+            style={{ alignSelf: "stretch", marginTop: spacing.md }}
           />
         </View>
       </View>

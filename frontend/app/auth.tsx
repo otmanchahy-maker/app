@@ -11,9 +11,6 @@ import { useToast } from "@/src/components/toast";
 import { useAuth } from "@/src/context/auth";
 import { fonts, makeStyles, spacing, useTheme } from "@/src/theme";
 
-const HERO =
-  "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHwxfHxtb3RpdmF0aW5nJTI0d29ya291dCUyMHJ1bm5pbmclMjBicmlnaHQlMjBzdW5saWdodHxlbnwwfHx8fDE3OTA0MzUzMzB8MA&ixlib=rb-4.1.0&q=85";
-
 export default function AuthScreen() {
   const { user, login } = useAuth();
   const { colors } = useTheme();
@@ -38,18 +35,18 @@ export default function AuthScreen() {
   return (
     <View style={styles.container} testID="auth-screen">
       <View style={styles.heroWrap}>
-        <Image source={{ uri: HERO }} style={styles.hero} contentFit="cover" transition={300} />
         <LinearGradient
-          colors={["transparent", "rgba(17,20,24,0.3)", colors.surface]}
-          locations={[0, 0.5, 1]}
+          colors={["#160F2E", "#0A0A12", colors.surface]}
+          locations={[0, 0.6, 1]}
           style={styles.scrim}
         />
+        <Image source={require("../assets/images/icon.png")} style={styles.logo} contentFit="contain" transition={300} />
       </View>
 
       <View style={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}>
         <View style={styles.badge}>
           <Lightning color={colors.onBrandPrimary} size={18} weight="fill" />
-          <Text style={styles.badgeText}>AI Personal Coach</Text>
+          <Text style={styles.badgeText}>Aura AI</Text>
         </View>
         <Text style={styles.title}>Raggiungi i tuoi{"\n"}obiettivi, più in fretta</Text>
         <Text style={styles.subtitle}>
@@ -72,8 +69,8 @@ export default function AuthScreen() {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.surface },
-  heroWrap: { height: "52%", width: "100%" },
-  hero: { flex: 1 },
+  heroWrap: { height: "52%", width: "100%", alignItems: "center", justifyContent: "center" },
+  logo: { width: "80%", height: "80%" },
   scrim: { ...StyleSheetAbsolute() },
   content: {
     flex: 1,

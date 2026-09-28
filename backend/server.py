@@ -2,6 +2,7 @@ import os
 import re
 import json
 import uuid
+import hashlib
 import logging
 import tempfile
 import ipaddress
@@ -37,7 +38,12 @@ AI_MODEL = ("anthropic", "claude-sonnet-5")
 EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 
 CREATOR_EMAIL = os.environ.get("CREATOR_EMAIL", "otmanchahy@gmail.com").lower()
-TRIAL_DAYS = 15
+TRIAL_DAYS = 14
+
+# TTS
+from emergentintegrations.llm.openai import OpenAITextToSpeech
+tts_client = OpenAITextToSpeech(api_key=EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
+VOICE_MAP = {"male": "onyx", "female": "nova"}
 
 # Email (Emergent-managed Resend)
 EMAIL_BASE_URL = "https://integrations.emergentagent.com"
@@ -235,6 +241,7 @@ async def auth_session(body: SessionRequest):
             "is_admin": is_admin,
             "has_active_subscription": False,
             "partner_email": "",
+            "voice_gender": "female",
             "created_at": now_utc().isoformat(),
         })
 
@@ -295,10 +302,10 @@ def compute_access(user: dict) -> dict:
     return {"access": "locked", "level": "expired", "days_left": 0, "paywall": True, "price": "9.99€/mese"}
 
 
-async def require_access(user: dict = Depends(get_current_user)) -> dict:
+async def require_premium(user: dict = Depends(get_current_user)) -> dict:
     acc = compute_access(user)
     if acc["paywall"]:
-        raise HTTPException(status_code=402, detail="Prova gratuita terminata. Abbonati per continuare.")
+        raise HTTPException(status_code=402, detail="Prova gratuita terminata. Passa a Premium per usare questa funzione.")
     return user
 
 
@@ -322,7 +329,7 @@ def clean_goal(g: dict) -> dict:
 
 
 @api_router.post("/goals")
-async def create_goal(user: dict = Depends(require_access)):
+async def create_goal(user: dict = Depends(get_current_user)):
     goal_id = f"goal_{uuid.uuid4().hex[:12]}"
     goal = {
         "goal_id": goal_id,
@@ -427,7 +434,7 @@ def build_transcript(messages: List[dict]) -> str:
 
 
 @api_router.post("/goals/{goal_id}/messages")
-async def post_message(goal_id: str, body: MessageCreate, user: dict = Depends(require_access)):
+async def post_message(goal_id: str, body: MessageCreate, user: dict = Depends(get_current_user)):
     goal = await _get_goal_or_404(goal_id, user)
     content = body.content.strip()
     if not content:
@@ -492,7 +499,7 @@ async def post_message(goal_id: str, body: MessageCreate, user: dict = Depends(r
 # Plan generation
 # ---------------------------------------------------------------------------
 @api_router.post("/goals/{goal_id}/generate-plan")
-async def generate_plan(goal_id: str, user: dict = Depends(require_access)):
+async def generate_plan(goal_id: str, user: dict = Depends(get_current_user)):
     goal = await _get_goal_or_404(goal_id, user)
 
     history = await db.messages.find(
@@ -694,7 +701,7 @@ async def toggle_milestone(goal_id: str, milestone_id: str, user: dict = Depends
 # Check-in
 # ---------------------------------------------------------------------------
 @api_router.post("/goals/{goal_id}/checkin")
-async def create_checkin(goal_id: str, body: CheckInCreate, user: dict = Depends(require_access)):
+async def create_checkin(goal_id: str, body: CheckInCreate, user: dict = Depends(get_current_user)):
     goal = await _get_goal_or_404(goal_id, user)
     tasks = await build_today(goal, user["user_id"], body.date)
     completed = sum(1 for t in tasks if t["completed"])
@@ -814,7 +821,7 @@ class SosRequest(BaseModel):
 
 
 @api_router.post("/coach/sos")
-async def coach_sos(body: SosRequest, user: dict = Depends(require_access)):
+async def coach_sos(body: SosRequest, user: dict = Depends(require_premium)):
     issue = body.issue.strip()
     if not issue:
         raise HTTPException(status_code=400, detail="Descrivi cosa ti blocca.")
@@ -830,7 +837,7 @@ async def coach_sos(body: SosRequest, user: dict = Depends(require_access)):
 # Voice check-in transcription (Whisper) + sentiment
 # ---------------------------------------------------------------------------
 @api_router.post("/voice/transcribe")
-async def voice_transcribe(file: UploadFile = File(...), user: dict = Depends(require_access)):
+async def voice_transcribe(file: UploadFile = File(...), user: dict = Depends(require_premium)):
     if stt_client is None:
         raise HTTPException(status_code=503, detail="Trascrizione non configurata.")
     data = await file.read()
@@ -946,7 +953,7 @@ async def set_partner(body: PartnerRequest, user: dict = Depends(get_current_use
 
 
 @api_router.post("/accountability/share")
-async def share_progress(user: dict = Depends(require_access)):
+async def share_progress(user: dict = Depends(get_current_user)):
     fresh = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
     partner = (fresh or {}).get("partner_email", "").strip()
     if not partner:
@@ -989,6 +996,73 @@ async def share_progress(user: dict = Depends(require_access)):
         logger.exception("Email share error")
         raise HTTPException(status_code=502, detail="Invio email fallito, riprova.")
     return {"ok": True, "email_id": email_id, "partner": partner}
+
+
+# ---------------------------------------------------------------------------
+# Settings & Text-to-Speech
+# ---------------------------------------------------------------------------
+_EMOJI_RE = re.compile(
+    "[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF\u2190-\u21FF\u2B00-\u2BFF\u2700-\u27BF]",
+    flags=re.UNICODE,
+)
+
+
+def clean_for_tts(text: str) -> str:
+    text = _EMOJI_RE.sub("", text)
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"`{1,3}[^`]*`{1,3}", "", text)
+    text = re.sub(r"[*_#>~|`]", "", text)
+    return re.sub(r"\s+", " ", text).strip()[:4000]
+
+
+class VoiceSetting(BaseModel):
+    voice_gender: str  # "male" | "female"
+
+
+@api_router.post("/settings/voice")
+async def set_voice(body: VoiceSetting, user: dict = Depends(get_current_user)):
+    gender = body.voice_gender if body.voice_gender in VOICE_MAP else "female"
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"voice_gender": gender}})
+    return {"voice_gender": gender}
+
+
+class TtsRequest(BaseModel):
+    text: str
+
+
+@api_router.post("/tts")
+async def create_tts(body: TtsRequest, user: dict = Depends(require_premium)):
+    if tts_client is None:
+        raise HTTPException(status_code=503, detail="Voce non configurata.")
+    text = clean_for_tts(body.text)
+    if not text:
+        raise HTTPException(status_code=400, detail="Testo vuoto.")
+    gender = user.get("voice_gender") or "female"
+    voice = VOICE_MAP.get(gender, "nova")
+    key = hashlib.sha256(f"{text}|{voice}|tts-1|mp3".encode()).hexdigest()
+
+    existing = await db.tts_cache.find_one({"key": key}, {"_id": 0, "key": 1})
+    if not existing:
+        try:
+            audio = await tts_client.generate_speech(text=text, model="tts-1", voice=voice, response_format="mp3")
+        except Exception:
+            logger.exception("TTS error")
+            raise HTTPException(status_code=502, detail="Sintesi vocale fallita, riprova.")
+        await db.tts_cache.update_one(
+            {"key": key},
+            {"$set": {"key": key, "audio": audio, "created_at": now_utc().isoformat()}},
+            upsert=True,
+        )
+    return {"url": f"/api/tts/{key}.mp3", "voice": voice}
+
+
+@api_router.get("/tts/{key}.mp3")
+async def get_tts(key: str):
+    from fastapi import Response
+    doc = await db.tts_cache.find_one({"key": key}, {"_id": 0, "audio": 1})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Audio non trovato.")
+    return Response(content=bytes(doc["audio"]), media_type="audio/mpeg", headers={"Cache-Control": "public, max-age=31536000"})
 
 
 @api_router.get("/")

@@ -1,15 +1,16 @@
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { CaretLeft, Lightning } from "phosphor-react-native";
+import { CaretLeft, Lightning, SpeakerHigh } from "phosphor-react-native";
 
 import { useToast } from "@/src/components/toast";
 import { PrimaryButton } from "@/src/components/ui";
 import { coachSos } from "@/src/api/client";
+import { speak, stopSpeech } from "@/src/audio/tts";
 import { fonts, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 
 const QUICK = [
@@ -44,6 +45,15 @@ export default function SosScreen() {
     sosMut.mutate(t);
   };
 
+  useEffect(() => () => stopSpeech(), []);
+
+  const listen = async () => {
+    if (!result) return;
+    const r = await speak(result);
+    if (r.locked) router.push("/paywall");
+    else if (!r.ok) toast(r.error || "Riproduzione fallita", "error");
+  };
+
   return (
     <View style={styles.screen} testID="sos-screen">
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
@@ -67,11 +77,19 @@ export default function SosScreen() {
             <Text style={styles.resultText}>{result}</Text>
           </View>
           <PrimaryButton
+            testID="sos-listen-button"
+            label="Ascolta"
+            variant="secondary"
+            icon={<SpeakerHigh color={colors.onBrandSecondary} size={18} weight="fill" />}
+            onPress={listen}
+            style={{ marginTop: spacing.lg }}
+          />
+          <PrimaryButton
             testID="sos-again-button"
             label="Un'altra situazione"
             variant="secondary"
-            onPress={() => { setResult(null); setIssue(""); }}
-            style={{ marginTop: spacing.lg }}
+            onPress={() => { setResult(null); setIssue(""); stopSpeech(); }}
+            style={{ marginTop: spacing.md }}
           />
           <PrimaryButton
             testID="sos-done-button"

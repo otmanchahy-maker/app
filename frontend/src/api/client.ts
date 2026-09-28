@@ -81,6 +81,11 @@ export const listCheckins = (id: string) => get(`/goals/${id}/checkins`);
 export const subscriptionStatus = () => get("/subscription/status");
 export const activateDemo = () => post("/subscription/activate-demo");
 
+// ---- Voice settings & TTS ----
+export const setVoice = (voice_gender: string) => post("/settings/voice", { voice_gender });
+export const requestTts = (text: string) => post("/tts", { text });
+export const ttsUrl = (path: string) => `${process.env.EXPO_PUBLIC_BACKEND_URL}${path}`;
+
 // ---- Gamification ----
 export const getGamification = () => get("/gamification");
 

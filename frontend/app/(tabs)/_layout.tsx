@@ -1,10 +1,8 @@
 import { Redirect, Tabs } from "expo-router";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { Platform } from "react-native";
-import { useQuery } from "@tanstack/react-query";
 import { ChartLineUp, ChatCircleDots, House, User } from "phosphor-react-native";
 
-import { subscriptionStatus } from "@/src/api/client";
 import { useAuth } from "@/src/context/auth";
 import { usesNativeTabs } from "@/src/navigation";
 import { fonts, useTheme } from "@/src/theme";
@@ -13,15 +11,8 @@ export default function TabsLayout() {
   const { user, loading } = useAuth();
   const { colors } = useTheme();
 
-  const statusQ = useQuery({
-    queryKey: ["subscription"],
-    queryFn: subscriptionStatus,
-    enabled: !!user,
-  });
-
   if (loading) return null;
   if (!user) return <Redirect href="/auth" />;
-  if (statusQ.data?.paywall) return <Redirect href="/paywall" />;
 
   if (usesNativeTabs) {
     return (

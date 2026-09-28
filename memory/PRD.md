@@ -43,6 +43,16 @@ Mobile app acting as a universal AI Personal Coach (in Italian). It must:
 - Backend tested: 30/30 new-feature tests + 16/16 regression green (real Claude, Resend, Whisper wiring).
 
 ## Backlog
+### Aura AI rebrand & premium platform (2026-06, update 3)
+- **Rebrand → "Aura AI"**: full dark theme (near-black + violet/blue aura), Plus Jakarta Sans kept. New generated aura logo/icon (luminous ring on dark) used as app icon, adaptive icon, splash, favicon, PWA icons. app.json name=Aura AI, userInterfaceStyle=dark.
+- **PWA**: `public/manifest.json` (standalone, theme #0A0A12, maskable icons), `public/sw.js` service worker (network-first + offline fallback), `app/+html.tsx` injects manifest/theme-color/apple-touch-icon + registers SW. Installable + mic over HTTPS. (Test after deploy.)
+- **Trial → 14 days**, feature-level premium gating (not whole-app): core (goals/plan/checkin/share) free; PREMIUM = SOS, voice transcription, TTS → 402 when trial expired & not subscribed & not creator. Creator otmanchahy@gmail.com always full.
+- **OpenAI TTS (managed)**: POST /api/tts → cached mp3 served at GET /api/tts/{key}.mp3; voice from user setting (male=onyx, female=nova). "Ascolta" buttons on SOS result, check-in feedback, and Profile "Ascolta i progressi".
+- **Voice selector** in Profile (Femminile empatica / Maschile motivante) → POST /api/settings/voice.
+- **Voice check-in** already records (expo-audio) → Whisper transcription + sentiment; now premium-gated.
+- Backend tested: 46/46 green (real Claude, OpenAI TTS, Resend).
+
+## Backlog (older)
 - P1: Edit/regenerate plan; per-metric progress charts (e.g. weight over time).
 - P1: Streak/reminder notifications (needs native build).
 - P2: Multiple concurrent goals switching; share/export plan; weekly review summary.

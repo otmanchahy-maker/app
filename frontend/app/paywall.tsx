@@ -46,7 +46,7 @@ export default function Paywall() {
 
   return (
     <View style={styles.screen} testID="paywall-screen">
-      <LinearGradient colors={[colors.brandPrimary, "#D84C10"]} style={styles.hero}>
+      <LinearGradient colors={[colors.brandPrimary, "#4F46E5"]} style={styles.hero}>
         <View style={[styles.heroInner, { paddingTop: insets.top + spacing["2xl"] }]}>
           <View style={styles.crown}>
             <Crown color={colors.brandPrimary} size={38} weight="fill" />

@@ -94,8 +94,8 @@ class TestSubscription:
         assert data["access"] == "trial"
         assert data["level"] == "trial"
         assert data["paywall"] is False
-        # Fresh user should have ~15 days left (14 or 15 depending on rounding)
-        assert data["days_left"] in (14, 15)
+        # Fresh user (TRIAL_DAYS=14) should have 13 or 14 days_left
+        assert data["days_left"] in (13, 14)
 
     def test_trial_expired_blocks_gated_endpoint(self, users):
         _, token = users(email=f"expired_{uuid.uuid4().hex[:6]}@example.com",
@@ -108,9 +108,12 @@ class TestSubscription:
         assert data["paywall"] is True
         assert data["days_left"] == 0
 
-        # gated endpoint returns 402
-        r2 = c.post(f"{BASE_URL}/api/goals", timeout=15)
-        assert r2.status_code == 402, r2.text
+        # In this iteration, POST /api/goals is CORE and FREE even for expired
+        # users. Only PREMIUM endpoints (SOS, TTS, transcribe) return 402.
+        r2 = c.post(f"{BASE_URL}/api/goals", timeout=30)
+        assert r2.status_code == 200, r2.text
+        r3 = c.post(f"{BASE_URL}/api/coach/sos", json={"issue": "help"}, timeout=15)
+        assert r3.status_code == 402, r3.text
 
     def test_creator_bypass(self, users, mongo_client):
         # Ensure any pre-existing seeded creator user with unique email index

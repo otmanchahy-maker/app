@@ -6,11 +6,13 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { CaretRight, FilePdf, PaperPlaneTilt, Plus, SignOut, Target, UsersThree } from "phosphor-react-native";
+import { CaretRight, FilePdf, PaperPlaneTilt, Plus, SignOut, SpeakerHigh, Target, UsersThree } from "phosphor-react-native";
 
 import { useToast } from "@/src/components/toast";
 import { PrimaryButton } from "@/src/components/ui";
-import { createGoal, getActiveGoal, getGamification, getPartner, listGoals, setPartner, shareProgress } from "@/src/api/client";
+import { createGoal, getActiveGoal, getGamification, getPartner, listGoals, setPartner, setVoice, shareProgress } from "@/src/api/client";
+import { speak, stopSpeech } from "@/src/audio/tts";
+import { useAccess } from "@/src/hooks/use-access";
 import { useAuth } from "@/src/context/auth";
 import { usesNativeTabs } from "@/src/navigation";
 import { fonts, makeStyles, radius, spacing, useTheme } from "@/src/theme";
@@ -37,10 +39,36 @@ export default function ProfileScreen() {
 
   const [partnerEmail, setPartnerEmail] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [voiceGender, setVoiceGender] = useState<string>((user as any)?.voice_gender || "female");
+  const { locked } = useAccess();
 
   useEffect(() => {
     if (partnerQ.data?.partner_email) setPartnerEmail(partnerQ.data.partner_email);
   }, [partnerQ.data]);
+
+  useEffect(() => () => stopSpeech(), []);
+
+  const voiceMut = useMutation({
+    mutationFn: (g: string) => setVoice(g),
+    onSuccess: (d) => {
+      setVoiceGender(d.voice_gender);
+      toast("Voce aggiornata 🔊", "success");
+    },
+    onError: () => toast("Errore", "error"),
+  });
+
+  const listenProgress = async () => {
+    const g = gamQ.data;
+    const active = activeQ.data?.goal;
+    if (!active) {
+      toast("Nessun obiettivo attivo.", "error");
+      return;
+    }
+    const text = `Ecco i tuoi progressi. Obiettivo: ${active.title}. Hai una striscia di ${g?.streak ?? 0} giorni di fila, ${g?.total_completed ?? 0} attività completate e ${g?.points ?? 0} punti. Continua così, stai andando alla grande!`;
+    const r = await speak(text);
+    if (r.locked) router.push("/paywall");
+    else if (!r.ok) toast(r.error || "Riproduzione fallita", "error");
+  };
 
   const savePartnerMut = useMutation({
     mutationFn: () => setPartner(partnerEmail.trim()),
@@ -58,6 +86,10 @@ export default function ProfileScreen() {
   });
 
   const exportPdf = async () => {
+    if (locked) {
+      router.push("/paywall");
+      return;
+    }
     const active = activeQ.data?.goal;
     const g = gamQ.data;
     if (!active) {
@@ -70,11 +102,11 @@ export default function ProfileScreen() {
       const html = `
         <html><head><meta charset="utf-8"/><style>
           body{font-family:-apple-system,Helvetica,Arial;padding:32px;color:#111418}
-          h1{color:#FF6B35;margin:0 0 4px} .sub{color:#60646C;margin:0 0 24px}
+          h1{color:#7C3AED;margin:0 0 4px} .sub{color:#60646C;margin:0 0 24px}
           .row{display:flex;gap:12px;margin:16px 0}
-          .card{flex:1;background:#F4F0E8;border-radius:12px;padding:16px;text-align:center}
-          .num{font-size:30px;font-weight:800;color:#FF6B35} .lbl{font-size:12px;color:#60646C}
-          .box{background:#FFF;border:1px solid #EBE7DF;border-radius:12px;padding:16px;margin-top:16px}
+          .card{flex:1;background:#F3F0FA;border-radius:12px;padding:16px;text-align:center}
+          .num{font-size:30px;font-weight:800;color:#7C3AED} .lbl{font-size:12px;color:#60646C}
+          .box{background:#FFF;border:1px solid #E7E1F5;border-radius:12px;padding:16px;margin-top:16px}
         </style></head><body>
           <h1>Report Progressi</h1>
           <p class="sub">${escapeHtml(user?.name || "")} — AI Personal Coach</p>
@@ -167,8 +199,40 @@ export default function ProfileScreen() {
           ))
         )}
 
+        <Text style={styles.section}>Voce del Coach</Text>
+        <View style={styles.voiceRow}>
+          <Pressable
+            testID="voice-female"
+            onPress={() => voiceMut.mutate("female")}
+            style={[styles.voiceOpt, voiceGender === "female" && styles.voiceOptActive]}
+          >
+            <Text style={styles.voiceEmoji}>👩</Text>
+            <Text style={[styles.voiceLabel, voiceGender === "female" && styles.voiceLabelActive]}>Femminile</Text>
+            <Text style={styles.voiceSub}>Empatica e calma</Text>
+          </Pressable>
+          <Pressable
+            testID="voice-male"
+            onPress={() => voiceMut.mutate("male")}
+            style={[styles.voiceOpt, voiceGender === "male" && styles.voiceOptActive]}
+          >
+            <Text style={styles.voiceEmoji}>👨</Text>
+            <Text style={[styles.voiceLabel, voiceGender === "male" && styles.voiceLabelActive]}>Maschile</Text>
+            <Text style={styles.voiceSub}>Motivante</Text>
+          </Pressable>
+        </View>
+
         <Text style={styles.section}>Strumenti</Text>
-        <Pressable testID="export-pdf-button" onPress={exportPdf} style={styles.toolRow} disabled={exporting}>
+        <Pressable testID="listen-progress-button" onPress={listenProgress} style={styles.toolRow}>
+          <View style={styles.toolIcon}>
+            <SpeakerHigh color={colors.brandPrimary} size={22} weight="fill" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.toolTitle}>Ascolta i progressi</Text>
+            <Text style={styles.toolSub}>Sintesi vocale dei tuoi traguardi</Text>
+          </View>
+          {locked ? <View style={styles.premiumTag}><Text style={styles.premiumTagText}>PRO</Text></View> : <CaretRight color={colors.muted} size={18} weight="bold" />}
+        </Pressable>
+        <Pressable testID="export-pdf-button" onPress={exportPdf} style={[styles.toolRow, { marginTop: spacing.md }]} disabled={exporting}>
           <View style={styles.toolIcon}>
             {exporting ? <ActivityIndicator color={colors.brandPrimary} /> : <FilePdf color={colors.brandPrimary} size={22} weight="fill" />}
           </View>
@@ -176,7 +240,7 @@ export default function ProfileScreen() {
             <Text style={styles.toolTitle}>Esporta report PDF</Text>
             <Text style={styles.toolSub}>Salva o condividi i tuoi progressi</Text>
           </View>
-          <CaretRight color={colors.muted} size={18} weight="bold" />
+          {locked ? <View style={styles.premiumTag}><Text style={styles.premiumTagText}>PRO</Text></View> : <CaretRight color={colors.muted} size={18} weight="bold" />}
         </Pressable>
 
         <View style={styles.partnerCard}>
@@ -310,4 +374,21 @@ const useStyles = makeStyles((colors) => ({
     color: colors.onSurface,
   },
   partnerBtns: { flexDirection: "row", gap: spacing.sm },
+  voiceRow: { flexDirection: "row", gap: spacing.md },
+  voiceOpt: {
+    flex: 1,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: "center",
+  },
+  voiceOptActive: { borderColor: colors.brandPrimary, backgroundColor: colors.brandSecondary },
+  voiceEmoji: { fontSize: 28 },
+  voiceLabel: { color: colors.onSurface, fontFamily: fonts.bold, fontSize: 14, marginTop: spacing.xs },
+  voiceLabelActive: { color: colors.onBrandSecondary },
+  voiceSub: { color: colors.muted, fontFamily: fonts.medium, fontSize: 11, marginTop: 2 },
+  premiumTag: { backgroundColor: colors.brandTertiary, paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.sm },
+  premiumTagText: { color: colors.onBrandTertiary, fontFamily: fonts.extrabold, fontSize: 10, letterSpacing: 0.5 },
 }));

@@ -127,7 +127,7 @@ export default function HomeScreen() {
         <Text style={styles.hello}>Ciao, {firstName} 👋</Text>
         <Text style={styles.date}>{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</Text>
       </View>
-      <Pressable testID="home-sos-button" onPress={() => router.push("/sos")} style={styles.sosPill}>
+      <Pressable testID="home-sos-button" onPress={() => router.push(subQ.data?.paywall ? "/paywall" : "/sos")} style={styles.sosPill}>
         <Lightning color={colors.onError} size={16} weight="fill" />
         <Text style={styles.sosText}>SOS</Text>
       </Pressable>
@@ -231,7 +231,7 @@ export default function HomeScreen() {
         <View style={styles.hero} testID="goal-hero">
           <Image source={{ uri: HERO_BG }} style={styles.heroBg} contentFit="cover" />
           <LinearGradient
-            colors={["rgba(216,76,16,0.85)", "rgba(255,107,53,0.92)"]}
+            colors={["rgba(139,92,246,0.85)", "rgba(79,70,229,0.92)"]}
             style={styles.heroScrim}
           />
           <View style={styles.heroContent}>

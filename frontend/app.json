@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "AI Personal Coach",
+    "name": "Aura AI",
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "frontend",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.goaltrackerai.wq63ov",
@@ -17,7 +17,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#0A0A12"
       },
       "package": "com.emergent.goaltrackerai.wq63ov",
       "permissions": ["RECORD_AUDIO"]
@@ -33,9 +33,9 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-image.png",
-          "imageWidth": 200,
+          "imageWidth": 220,
           "resizeMode": "contain",
-          "backgroundColor": "#000000"
+          "backgroundColor": "#0A0A12"
         }
       ],
       "expo-font",
